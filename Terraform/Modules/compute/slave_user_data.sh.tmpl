@@ -1,0 +1,155 @@
+#!/bin/bash
+set -e
+exec > >(tee /var/log/user-data.log) 2>&1
+
+echo "Starting App Server setup as Jenkins agent..."
+
+##########################################
+# Injected by Terraform
+##########################################
+JENKINS_MASTER_IP="${jenkins_private_ip}"
+JENKINS_URL="http://${jenkins_private_ip}:8080"
+NODE_NAME="app-agent"
+AGENT_WORKDIR="/home/ubuntu/jenkins"
+
+echo "Using Jenkins master at: $JENKINS_URL"
+
+##########################################
+# Install Dependencies
+##########################################
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -y
+apt-get install -y openjdk-17-jdk curl wget jq awscli
+
+# Install Docker
+apt-get install -y apt-transport-https ca-certificates software-properties-common
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io
+usermod -aG docker ubuntu
+
+##########################################
+# Wait for Jenkins master to accept connections
+##########################################
+echo "=== Waiting for Jenkins Master to be ready ==="
+
+RETRY_COUNT=0
+MAX_RETRIES=60
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    STATUS=$(curl -s -o /dev/null -w "%%{http_code}" "$JENKINS_URL/login")
+
+    if [[ "$STATUS" == "200" || "$STATUS" == "302" || "$STATUS" == "403" ]]; then
+        echo "Jenkins Master responded with status: $STATUS — OK"
+        break
+    fi
+
+    echo "Waiting for Jenkins... ($RETRY_COUNT/$MAX_RETRIES) – status: $STATUS"
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    sleep 5
+done
+
+if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+    echo "ERROR: Jenkins Master did not become available"
+    exit 1
+fi
+
+echo "Waiting additional 40 seconds for Jenkins initialization..."
+sleep 40
+
+##########################################
+# Verify agent exists on the master
+##########################################
+echo "Checking if agent node exists..."
+if ! curl -s "$JENKINS_URL/computer/$NODE_NAME/" | grep -q "app-agent"; then
+    echo "WARNING: Agent node $NODE_NAME not found in Jenkins UI!"
+else
+    echo "Agent node exists."
+fi
+
+##########################################
+# Prepare agent workspace
+##########################################
+mkdir -p "$AGENT_WORKDIR"
+cd "$AGENT_WORKDIR"
+chown -R ubuntu:ubuntu "$AGENT_WORKDIR"
+
+##########################################
+# Download agent.jar
+##########################################
+echo "Downloading agent.jar..."
+wget -q "$JENKINS_URL/jnlpJars/agent.jar" -O agent.jar
+
+if [ ! -f agent.jar ]; then
+    echo "ERROR: Failed to download agent.jar"
+    exit 1
+fi
+
+##########################################
+# Get agent secret
+##########################################
+echo "Retrieving agent secret..."
+
+SECRET=$(curl -s -u admin:Admin123! "$JENKINS_URL/computer/$NODE_NAME/jenkins-agent.jnlp" \
+      | grep -oP '(?<=<argument>)[A-Za-z0-9+/=._-]{20,}' | head -1)
+
+if [ -z "$SECRET" ]; then
+    SECRET=$(curl -s -u admin:Admin123! "$JENKINS_URL/computer/$NODE_NAME/slave-agent.jnlp" \
+        | grep -oP '(?<=<argument>)[A-Za-z0-9+/=._-]{20,}' | head -1)
+fi
+
+if [ -z "$SECRET" ]; then
+    echo "ERROR: Could not retrieve agent secret"
+    exit 1
+fi
+
+##########################################
+# Create systemd service
+##########################################
+echo "Creating systemd service..."
+
+cat > /etc/systemd/system/jenkins-agent.service <<EOF
+[Unit]
+Description=Jenkins Agent
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/jenkins
+ExecStart=/usr/bin/java -jar /home/ubuntu/jenkins/agent.jar \
+    -url http://$${JENKINS_MASTER_IP}:8080/ \
+    -secret $${SECRET} \
+    -name "app-agent" \
+    -webSocket \
+    -workDir /home/ubuntu/jenkins
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+##########################################
+# Start Agent
+##########################################
+systemctl daemon-reload
+systemctl enable jenkins-agent
+systemctl start jenkins-agent
+
+sleep 10
+
+if systemctl is-active --quiet jenkins-agent; then
+    echo "=========================================="
+    echo " Jenkins agent connected successfully!"
+    echo " Node Name: $NODE_NAME"
+    echo " URL: $JENKINS_URL"
+    echo "=========================================="
+else
+    echo "=========================================="
+    echo " Jenkins agent FAILED to start!"
+    echo "=========================================="
+    journalctl -u jenkins-agent --no-pager -n 50
+    exit 1
+fi

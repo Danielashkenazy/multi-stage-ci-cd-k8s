@@ -18,6 +18,8 @@ spec:
         - name: {{ include "rickandmorty.name" . }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          imagePullSecrets:
+            - name: regcred
           ports:
             - containerPort: {{ .Values.service.targetPort }}
           livenessProbe:

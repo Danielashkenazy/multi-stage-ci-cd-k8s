@@ -1,7 +1,7 @@
 replicaCount: 3
 
 image:
-  repository: danielashkenazy1/CICD_K8S_python_app
+  repository: danielashkenazy1/cicd_k8s_python_app
   tag: latest
   pullPolicy: IfNotPresent
 

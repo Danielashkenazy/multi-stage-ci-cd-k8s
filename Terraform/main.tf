@@ -46,12 +46,14 @@ module "vpc" {
 
 module "eks" {
   source = "./modules/eks"
-  allowed_cidr        = var.allowed_cidr
+  allowed_cidr        = [var.allowed_cidr]
   vpc_id              = module.vpc.vpc_id
   public_subnet_a_id  = module.vpc.public_subnet_a_id
   public_subnet_b_id  = module.vpc.public_subnet_b_id
   private_subnet_a_id = module.vpc.private_subnet_a_id
-  depends_on = [ module.vpc ]
+  slave_sg_id         = module.security.slave_sg_id
+  depends_on = [ module.vpc, module.compute ]
+
 
 }
 
@@ -68,7 +70,6 @@ data "aws_eks_cluster_auth" "this" {
 }
 
 provider "kubernetes" {
-  alias="eks"
   host                   = data.aws_eks_cluster.this.endpoint
   cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
   token                  = data.aws_eks_cluster_auth.this.token
@@ -98,9 +99,11 @@ module "iam" {
   oidc_issuer_url       = module.eks.cluster_oidc_issuer_url
   your_iam_role_arn    = var.your_iam_role_arn
   depends_on = [ module.eks ]
-  providers = {
-    kubernetes = kubernetes.eks
+  token_dependency_barrier = null_resource.kube_config_ready.id
+   providers = {
+    kubernetes = kubernetes
   }
+
 }
 module "security" {
   source = "./Modules/security"
@@ -118,24 +121,115 @@ module "helm_alb_controller" {
   alb_role_arn     = module.iam.iam_role_alb_controller_arn
     providers = {
     helm = helm
-    kubernetes = kubernetes.eks
-    kubectl = kubectl
   }
   
-  depends_on = [module.iam, module.eks, module.vpc ]
+depends_on = [module.iam, module.eks, module.vpc, null_resource.kube_config_ready]
 }
 
 
-
-module "comptue" {
+module "compute" {
   source = "./Modules/compute"
   instance_type = var.instance_type
   jenkins_sg_id = module.security.jenkins_sg_id
   slave_sg_id = module.security.slave_sg_id
   public_subnet_id = module.vpc.public_subnet_a_id
   private_subnet_id = module.vpc.private_subnet_a_id
+
   depends_on =  [ module.vpc ]
 }
 
+#####Creating a namespace for devops####
+resource "kubernetes_namespace" "devops" {
+  
+
+  metadata {
+    name = "devops"
+  }
+
+  depends_on = [
+    module.eks,
+    data.aws_eks_cluster.this,
+    data.aws_eks_cluster_auth.this,
+    null_resource.kube_config_ready
+  ]
+}
+
+####Service account creation - For CD on Jenkins to EKS####
+resource "kubernetes_service_account" "jenkins_deployer" {
+  
+  metadata {
+    name      = "jenkins-deployer"
+    namespace = "devops"
+  }
+  depends_on = [module.eks, data.aws_eks_cluster.this,data.aws_eks_cluster_auth.this, null_resource.kube_config_ready]
+}
+
+resource "kubernetes_role" "jenkins_deployer_role" {
+  
+
+  metadata {
+    name      = "jenkins-deployer-role"
+    namespace = "devops"
+  }
+
+  rule {
+    api_groups = ["", "apps"]
+    resources  = ["pods", "services", "deployments"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch"]
+  }
+  depends_on = [module.eks, data.aws_eks_cluster.this,data.aws_eks_cluster_auth.this, null_resource.kube_config_ready]
+
+}
+
+resource "kubernetes_role_binding" "jenkins_deployer_binding" {
+  
+  metadata {
+    name      = "jenkins-deployer-binding"
+    namespace = "devops"
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role.jenkins_deployer_role.metadata[0].name
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account.jenkins_deployer.metadata[0].name
+    namespace = "devops"
+  }
+   depends_on = [
+    kubernetes_service_account.jenkins_deployer,
+    kubernetes_role.jenkins_deployer_role,
+    data.aws_eks_cluster_auth.this,
+    null_resource.kube_config_ready
+  ]
+}
+####Service account Secret ####
+resource "kubernetes_secret" "jenkins_sa_token" {
+  
+
+  metadata {
+    name      = "jenkins-deployer-token"
+    namespace = kubernetes_namespace.devops.metadata[0].name
+    annotations = {
+      "kubernetes.io/service-account.name" = kubernetes_service_account.jenkins_deployer.metadata[0].name
+    }
+  }
+
+  type = "kubernetes.io/service-account-token"
+
+  depends_on = [
+    kubernetes_service_account.jenkins_deployer
+  ]
+}
 
 
+resource "null_resource" "kube_config_ready" {
+  # המשאב הזה לא עושה כלום, רק מאלץ את הטעינה.
+  triggers = {
+    cluster_endpoint = data.aws_eks_cluster.this.endpoint
+    cluster_token    = data.aws_eks_cluster_auth.this.token
+  }
+}

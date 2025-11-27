@@ -14,3 +14,7 @@ variable "allowed_cidr" {
   description = "allowed cidr for eks access"
 }
 
+variable "slave_sg_id" {
+  description = "Security Group ID for slave instance"
+}
+

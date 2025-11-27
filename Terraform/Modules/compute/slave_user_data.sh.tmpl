@@ -29,6 +29,12 @@ apt-get update
 apt-get install -y docker-ce docker-ce-cli containerd.io
 usermod -aG docker ubuntu
 
+
+####Install Kubectl###
+curl -L "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl
+chmod +x kubectl
+sudo mv kubectl /usr/local/bin/kubectl
+
 ##########################################
 # Wait for Jenkins master to accept connections
 ##########################################

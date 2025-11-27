@@ -1,19 +1,16 @@
-terraform {
-  required_providers {
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = ">= 2.29.0"
-      configuration_aliases = [kubernetes]
-    }
-  }
-}
 
 data "aws_caller_identity" "current" {}
 
 locals {
   oidc_provider_hostpath = replace(var.oidc_issuer_url, "https://", "")
 }
-
+terraform {
+  required_providers {
+    kubernetes = {
+      source = "hashicorp/kubernetes"
+    }
+  }
+}
 
 ####Iam role for alb controller###
 resource "aws_iam_role" "alb_controller" {
@@ -83,7 +80,9 @@ resource "kubernetes_service_account" "alb_sa" {
       "eks.amazonaws.com/role-arn" = aws_iam_role.alb_controller.arn
     }
   }
-
+depends_on = [
+    var.token_dependency_barrier
+  ]
 }
 
 

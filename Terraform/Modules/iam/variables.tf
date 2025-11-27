@@ -13,3 +13,7 @@ variable "oidc_issuer_url" {
 variable "your_iam_role_arn" {
     description = "IAM Role Name for EKS Access"
 }
+variable "token_dependency_barrier" {
+  type    = string
+  default = ""
+}

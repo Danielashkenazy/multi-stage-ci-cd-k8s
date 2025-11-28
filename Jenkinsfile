@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'linux' }
+    agent { label 'ec2-agent' }
 
     environment {
         IMAGE_NAME = "danielashkenazy1/cicd_k8s_python_app"

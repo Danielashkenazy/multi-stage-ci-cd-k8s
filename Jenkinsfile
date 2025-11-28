@@ -81,7 +81,7 @@ pipeline {
 
 
                 publishHTML(target: [
-                    reportDir: 'htmlcov',
+                    reportDir: 'Docker/htmlcov',
                     reportFiles: 'index.html',
                     reportName: "Coverage Report"
                 ])

@@ -142,7 +142,7 @@ pipeline {
 
                     helm upgrade --install \
                         python-app ./Helm \
-                        --namespace devops \   
+                        --namespace devops \
                         --set image.tag=${IMAGE_TAG}
 
                     """

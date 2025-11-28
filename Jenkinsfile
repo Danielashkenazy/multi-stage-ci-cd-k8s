@@ -57,7 +57,7 @@ pipeline {
                     echo "Running Bandit..."
                     . .venv/bin/activate || true
                     pip install bandit
-                    bandit -r app -x .venv,tests,__pycache__,**/site-packages/** -ll
+                    bandit -r . -x .venv,tests,__pycache__,**/site-packages/** -ll
                     """
                 }
             }

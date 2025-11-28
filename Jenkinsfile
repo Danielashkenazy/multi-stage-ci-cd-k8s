@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "danielashkenazy1/cicd_k8s_python_app"
+        KUBECONFIG = "/home/ubuntu/.kube/config"
     }
 
     stages {

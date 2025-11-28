@@ -182,6 +182,11 @@ resource "kubernetes_role" "jenkins_deployer_role" {
     resources  = ["secrets", "configmaps"]
     verbs      = ["get", "list", "watch", "create", "update", "patch","delete"]
   }
+  rule {
+  api_groups = ["networking.k8s.io"]
+  resources  = ["ingresses"]
+  verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+ }
   depends_on = [module.eks, data.aws_eks_cluster.this,data.aws_eks_cluster_auth.this, null_resource.kube_config_ready]
 
 }

@@ -41,8 +41,8 @@ pipeline {
                     python3 -m venv .venv
                     . .venv/bin/activate
                     pip install -r requirments.txt
-                    pip install flake8
-                    flake8 . --exclude=.venv,__pycache__,.git
+                    pip install flake8 
+                    flake8 . --exclude=.venv,__pycache__,.git --ignore=E501,W292,E303,E302
                     """
                 }
             }

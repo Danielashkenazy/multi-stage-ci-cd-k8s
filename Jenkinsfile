@@ -24,7 +24,7 @@ pipeline {
                     docker run --rm \
                         -v "\$(pwd):/scan" \
                         trufflesecurity/trufflehog:latest \
-                        filesystem /scan --fail --no-update \
+                        filesystem /scan/Docker --fail --no-update \
                         --exclude-paths /scan/Jenkins/ci/trufflehog_exclude.txt
                     """
                 }

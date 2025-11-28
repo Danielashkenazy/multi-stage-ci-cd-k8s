@@ -141,7 +141,7 @@ pipeline {
                     echo "Deploying with Helm..."
 
                     helm upgrade --install \
-                        python-app ./helm \
+                        python-app ./Helm \
                         --namespace devops \
                         --create-namespace \
                         --set image.tag=${IMAGE_TAG}

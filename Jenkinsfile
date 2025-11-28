@@ -119,6 +119,7 @@ pipeline {
 
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                         sh """
+                        cd Docker
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker build -t $IMAGE_NAME:ci-${shortSha} .
                         docker push $IMAGE_NAME:ci-${shortSha}

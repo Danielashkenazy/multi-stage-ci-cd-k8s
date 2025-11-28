@@ -76,7 +76,8 @@ pipeline {
                     """
                 }
 
-                junit 'junit.xml'
+                    junit 'Docker/junit.xml'
+
 
                 publishHTML(target: [
                     reportDir: 'htmlcov',

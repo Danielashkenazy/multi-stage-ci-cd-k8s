@@ -38,6 +38,7 @@ pipeline {
                     sh """
                     cd Docker
                     echo "Running Flake8..."
+                    apt install python3.8-venv -y
                     python3 -m venv .venv
                     . .venv/bin/activate
                     pip install -r requirements.txt

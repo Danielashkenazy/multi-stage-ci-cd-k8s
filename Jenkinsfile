@@ -40,7 +40,7 @@ pipeline {
                     echo "Running Flake8..."
                     python3 -m venv .venv
                     . .venv/bin/activate
-                    pip install -r requirements.txt
+                    pip install -r requirments.txt
                     pip install flake8
                     flake8 . --exclude=.venv,__pycache__,.git
                     """

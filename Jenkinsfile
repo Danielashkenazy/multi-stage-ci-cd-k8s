@@ -147,6 +147,29 @@ pipeline {
             }
         }
 
+        stage('Create Docker Pull Secret in Kubernetes') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                
+                    sh """
+                    kubectl delete secret regcred -n devops --ignore-not-found=true
+        
+                    kubectl create secret docker-registry regcred \
+                      --docker-server=https://index.docker.io/v1/ \
+                      --docker-username=$DOCKER_USER \
+                      --docker-password=$DOCKER_PASS \
+                      --docker-email=ignore@example.com \
+                      -n devops
+                    """
+        
+                    echo "✔ Docker pull secret updated in Kubernetes"
+                }
+            }
+        }
         // ------------------------------
         stage('Deploy to Kubernetes (HELM)') {
             steps {

@@ -14,7 +14,22 @@ pipeline {
                 checkout scm
             }
         }
+        stage('Verify PR Merge') {
+            steps {
+                script {
+                    def msg = sh(
+                        script: "git log -1 --pretty=%s",
+                        returnStdout: true
+                    ).trim()
 
+                    if (!msg.startsWith("Merge pull request")) {
+                        error "Pipeline aborted: this is NOT a PR merge."
+                    }
+
+                    echo "✔ Confirmed: PR merge detected, continuing pipeline..."
+                }
+            }
+        }
         // ------------------------------
         stage('Secrets Detection') {
             steps {

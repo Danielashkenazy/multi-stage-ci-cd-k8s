@@ -2,8 +2,8 @@ replicaCount: 3
 
 image:
   repository: danielashkenazy1/cicd_k8s_python_app
-  tag: latest
-  pullPolicy: IfNotPresent
+  tag: ""
+  pullPolicy: always
 
 service:
   type: ClusterIP

@@ -162,7 +162,6 @@ pipeline {
                       --docker-server=https://index.docker.io/v1/ \
                       --docker-username=$DOCKER_USER \
                       --docker-password=$DOCKER_PASS \
-                      --docker-email=ignore@example.com \
                       -n devops
                     """
         

@@ -9,7 +9,7 @@ pipeline {
     environment {
         KUBECONFIG = "/home/ubuntu/.kube/config"
         NAMESPACE = "devops"
-        LABEL = "python-app"
+        LABEL = "app=rickandmorty"
     }
 
     stages {

@@ -174,7 +174,7 @@ resource "kubernetes_role" "jenkins_deployer_role" {
 
   rule {
     api_groups = ["", "apps"]
-    resources  = ["pods", "services", "deployments"]
+    resources  = ["pods", "services", "deployments","exec","pods/exec"]
     verbs      = ["get", "list", "watch", "create", "update", "patch","delete"]
   }
   rule {
@@ -192,6 +192,7 @@ resource "kubernetes_role" "jenkins_deployer_role" {
   resources  = ["deployments","scale"]
   verbs      = ["get", "update", "patch"]
 }
+
   depends_on = [module.eks, data.aws_eks_cluster.this,data.aws_eks_cluster_auth.this, null_resource.kube_config_ready]
 
 }

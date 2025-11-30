@@ -52,7 +52,7 @@ pipeline {
             steps {
                 sh """
                 echo "Copying file to pod..."
-                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH}
+                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c rickandmorty
                 """
             }
         }

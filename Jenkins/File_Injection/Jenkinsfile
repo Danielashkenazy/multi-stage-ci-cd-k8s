@@ -3,18 +3,19 @@ pipeline {
 
     parameters {
         string(name: 'FILE_PATH', defaultValue: 'Jenkins/example.txt', description: 'Path to the file inside the repo')
-        string(name: 'TARGET_PATH', defaultValue: '/app/app-config.yaml', description: 'Target path inside the pod')
+        string(name: 'TARGET_PATH', defaultValue: '/app/config/app-config.yaml', description: 'Destination path inside the pod')
     }
 
     environment {
         KUBECONFIG = "/home/ubuntu/.kube/config"
-        NAMESPACE = "devops"
-        LABEL = "app=rickandmorty"
+        NAMESPACE  = "devops"
+        LABEL      = "app=rickandmorty"
+        CONTAINER  = "rickandmorty"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Repository') {
             steps {
                 checkout scm
             }
@@ -24,26 +25,30 @@ pipeline {
             steps {
                 script {
                     if (!fileExists(params.FILE_PATH)) {
-                        error "❌ File does not exist: ${params.FILE_PATH}"
+                        error "❌ File does not exist in repo: ${params.FILE_PATH}"
                     }
                     echo "✔ File exists: ${params.FILE_PATH}"
                 }
             }
         }
 
-        stage('Find Pod') {
+        stage('Find Running Pod') {
             steps {
                 script {
-                    POD = sh(
-                        script: """kubectl get pods -n ${NAMESPACE} -l ${LABEL} -o jsonpath='{.items[0].metadata.name}'""",
+                    env.POD = sh(
+                        script: """
+                        kubectl get pods -n ${NAMESPACE} -l ${LABEL} \
+                        --field-selector=status.phase=Running \
+                        -o jsonpath='{.items[0].metadata.name}'
+                        """,
                         returnStdout: true
                     ).trim()
 
-                    if (!POD) {
-                        error "❌ No pods found with label: ${LABEL}"
+                    if (!env.POD) {
+                        error "❌ No Running pods found with label: ${LABEL}"
                     }
 
-                    echo "✔ Using Pod: $POD"
+                    echo "✔ Using Running Pod: ${env.POD}"
                 }
             }
         }
@@ -52,16 +57,16 @@ pipeline {
             steps {
                 sh """
                 echo "Copying file to pod..."
-                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c rickandmorty
+                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c ${CONTAINER}
                 """
             }
         }
 
-        stage('Verify') {
+        stage('Verify inside pod') {
             steps {
                 sh """
                 echo "Verifying file inside pod..."
-                kubectl exec -n ${NAMESPACE} ${POD} -- ls -l ${TARGET_PATH}
+                kubectl exec -n ${NAMESPACE} ${POD} -c ${CONTAINER} -- ls -l ${TARGET_PATH}
                 """
             }
         }

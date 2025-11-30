@@ -1,0 +1,69 @@
+pipeline {
+    agent { label 'ec2-agent' }
+
+    parameters {
+        string(name: 'FILE_PATH', defaultValue: 'Jenkins/example.txt', description: 'Path to the file inside the repo')
+        string(name: 'TARGET_PATH', defaultValue: '/app/config/app-config.yaml', description: 'Target path inside the pod')
+    }
+
+    environment {
+        KUBECONFIG = "/home/ubuntu/.kube/config"
+        NAMESPACE = "devops"
+        LABEL = "python-app"
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate file exists') {
+            steps {
+                script {
+                    if (!fileExists(params.FILE_PATH)) {
+                        error "❌ File does not exist: ${params.FILE_PATH}"
+                    }
+                    echo "✔ File exists: ${params.FILE_PATH}"
+                }
+            }
+        }
+
+        stage('Find Pod') {
+            steps {
+                script {
+                    POD = sh(
+                        script: """kubectl get pods -n ${NAMESPACE} -l ${LABEL} -o jsonpath='{.items[0].metadata.name}'""",
+                        returnStdout: true
+                    ).trim()
+
+                    if (!POD) {
+                        error "❌ No pods found with label: ${LABEL}"
+                    }
+
+                    echo "✔ Using Pod: $POD"
+                }
+            }
+        }
+
+        stage('Copy file to pod') {
+            steps {
+                sh """
+                echo "Copying file to pod..."
+                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH}
+                """
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh """
+                echo "Verifying file inside pod..."
+                kubectl exec -n ${NAMESPACE} ${POD} -- ls -l ${TARGET_PATH}
+                """
+            }
+        }
+    }
+}

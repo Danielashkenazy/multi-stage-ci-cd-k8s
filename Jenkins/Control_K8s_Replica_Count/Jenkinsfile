@@ -1,0 +1,37 @@
+pipeline {
+    agent { label 'ec2-agent' }
+
+    parameters {
+        string(name: 'REPLICAS', defaultValue: '3', description: 'Number of replicas')
+        string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+    }
+
+    environment {
+        KUBECONFIG = "/home/ubuntu/.kube/config"
+        NAMESPACE = "devops"
+        RELEASE = "python-app"
+        CHART = "./Helm/
+    }
+
+    stages {
+
+        stage('Helm Upgrade') {
+            steps {
+                sh """
+                helm upgrade $RELEASE $CHART \
+                    --namespace $NAMESPACE \
+                    --set replicaCount=${REPLICAS} \
+                    --set image.tag=${IMAGE_TAG}
+                """
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh """
+                kubectl get deploy -n $NAMESPACE
+                """
+            }
+        }
+    }
+}

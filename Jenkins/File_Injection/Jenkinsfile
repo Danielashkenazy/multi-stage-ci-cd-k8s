@@ -3,7 +3,7 @@ pipeline {
 
     parameters {
         string(name: 'FILE_PATH', defaultValue: 'Jenkins/example.txt', description: 'Path to the file inside the repo')
-        string(name: 'TARGET_PATH', defaultValue: '/app/config/app-config.yaml', description: 'Target path inside the pod')
+        string(name: 'TARGET_PATH', defaultValue: '/app/app-config.yaml', description: 'Target path inside the pod')
     }
 
     environment {

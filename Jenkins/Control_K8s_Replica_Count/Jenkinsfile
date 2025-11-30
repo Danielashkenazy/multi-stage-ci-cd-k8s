@@ -10,7 +10,7 @@ pipeline {
         KUBECONFIG = "/home/ubuntu/.kube/config"
         NAMESPACE = "devops"
         RELEASE = "python-app"
-        CHART = "./Helm/
+        CHART = "./Helm/"
     }
 
     stages {

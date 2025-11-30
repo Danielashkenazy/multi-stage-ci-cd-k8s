@@ -10,7 +10,7 @@ pipeline {
         KUBECONFIG = "/home/ubuntu/.kube/config"
         NAMESPACE = "devops"
         RELEASE = "python-app"
-        CHART = "./Helm/"
+        CHART = "./Helm"
     }
 
     stages {
@@ -18,10 +18,13 @@ pipeline {
         stage('Helm Upgrade') {
             steps {
                 sh """
-                helm upgrade $RELEASE $CHART \
-                    --namespace $NAMESPACE \
-                    --set replicaCount=${REPLICAS} \
-                    --set image.tag=${IMAGE_TAG}
+                    echo "Using REPLICAS=${REPLICAS}"
+                    echo "Using IMAGE_TAG=${IMAGE_TAG}"
+
+                    helm upgrade ${RELEASE} ${CHART} \
+                        --namespace ${NAMESPACE} \
+                        --set replicaCount=${REPLICAS} \
+                        --set image.tag=${IMAGE_TAG}
                 """
             }
         }
@@ -29,7 +32,7 @@ pipeline {
         stage('Verify') {
             steps {
                 sh """
-                kubectl get deploy -n $NAMESPACE
+                    kubectl -n ${NAMESPACE} get deploy
                 """
             }
         }

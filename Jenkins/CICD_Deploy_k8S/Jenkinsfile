@@ -1,5 +1,9 @@
+def USE_K8S = false   // dynamic fallback flag
+
 pipeline {
-    agent { label 'ec2-agent' }   // ברירת המחדל: הכל רץ על ה-EC2
+
+    // ברירת מחדל – EC2 Jenkins agent
+    agent { label 'ec2-agent' }
 
     environment {
         IMAGE_NAME = "danielashkenazy1/cicd_k8s_python_app"
@@ -8,106 +12,199 @@ pipeline {
 
     stages {
 
+        // ============================================================
+        // שלב 0 – בדיקת זמינות Kubernetes Dynamic Agent
+        // ============================================================
+        stage('Detect Kubernetes Availability') {
+            steps {
+                script {
+                    echo "🔍 Checking Kubernetes dynamic agent availability..."
+
+                    try {
+                        timeout(time: 20, unit: 'SECONDS') {
+                            node('tools-agent') {
+                                sh "echo 'K8S dynamic agent works'"
+                            }
+                        }
+
+                        USE_K8S = true
+                        echo "✅ K8S Agent is available → using tools-agent for supported stages."
+
+                    } catch (err) {
+                        USE_K8S = false
+                        echo "⚠️ K8S Agent NOT available → fallback to EC2 for all stages."
+                    }
+                }
+            }
+        }
+
+        // ============================================================
+        // שלב 1 – Checkout
+        // ============================================================
         stage('Checkout') {
             steps { checkout scm }
         }
 
-        // -------------------------------
-        // שלבים שרצים בתוך POD (כלים)
-        // -------------------------------
-        stage('Secrets Detection') {
-            agent { label 'tools-agent' }
+        // ============================================================
+        // שלב 2 – Secrets Detection (TruffleHog)
+        // תמיד על EC2 – אין Docker בתוך Pod
+        // ============================================================
+        stage('Secrets Detection (TruffleHog)') {
             steps {
+                echo "🕵️ Running TruffleHog on EC2 (docker required)..."
+
                 sh '''
-                trufflehog filesystem /scan/Docker --fail || true
+                docker run --rm \
+                    -v "$(pwd):/scan" \
+                    trufflesecurity/trufflehog:latest \
+                    filesystem /scan/Docker --fail --no-update \
+                    --exclude-paths /scan/Jenkins/ci/trufflehog_exclude.txt || true
                 '''
             }
         }
 
+        // ============================================================
+        // שלב 3 – Lint (flake8)
+        // ============================================================
         stage('Lint') {
-            agent { label 'tools-agent' }
             steps {
-                sh '''
-                cd Docker
-                python3 -m venv .venv
-                . .venv/bin/activate
-                pip install -r requirments.txt
-                pip install flake8
-                flake8 .
-                '''
-            }
-        }
-
-        stage('Security Scan (Bandit)') {
-            agent { label 'tools-agent' }
-            steps {
-                sh '''
-                cd Docker
-                . .venv/bin/activate
-                pip install bandit
-                bandit -r . -ll --skip B104,B113
-                '''
-            }
-        }
-
-        stage('Unit Tests') {
-            agent { label 'tools-agent' }
-            steps {
-                sh '''
-                cd Docker
-                . .venv/bin/activate
-                pip install pytest pytest-cov
-                pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
-                '''
-            }
-            post {
-                always {
-                    junit 'Docker/junit.xml'
-                    publishHTML([
-                        reportDir: 'Docker/htmlcov',
-                        reportFiles: 'index.html',
-                        reportName: "Coverage Report"
-                    ])
+                script {
+                    if (USE_K8S) {
+                        echo "🔧 Running Lint in Kubernetes Pod..."
+                        node('tools-agent') {
+                            sh '''
+                            cd Docker
+                            python3 -m venv .venv
+                            . .venv/bin/activate
+                            pip install -r requirments.txt -q
+                            pip install flake8 -q
+                            flake8 .
+                            '''
+                        }
+                    } else {
+                        echo "🔧 Running Lint on EC2..."
+                        sh '''
+                        cd Docker
+                        python3 -m venv .venv
+                        . .venv/bin/activate
+                        pip install -r requirments.txt -q
+                        pip install flake8 -q
+                        flake8 .
+                        '''
+                    }
                 }
             }
         }
 
-        // -------------------------------
-        // שלבים שרצים רק על ה־EC2
-        // -------------------------------
+        // ============================================================
+        // שלב 4 – Security Scan (bandit)
+        // ============================================================
+        stage('Security Scan') {
+            steps {
+                script {
+                    if (USE_K8S) {
+                        echo "🔐 Running Bandit in Kubernetes Pod..."
+                        node('tools-agent') {
+                            sh '''
+                            cd Docker
+                            . .venv/bin/activate
+                            pip install bandit -q
+                            bandit -r . -ll --skip B104,B113
+                            '''
+                        }
+                    } else {
+                        echo "🔐 Running Bandit on EC2..."
+                        sh '''
+                        cd Docker
+                        . .venv/bin/activate
+                        pip install bandit -q
+                        bandit -r . -ll --skip B104,B113
+                        '''
+                    }
+                }
+            }
+        }
 
+        // ============================================================
+        // שלב 5 – Tests (pytest)
+        // ============================================================
+        stage('Unit Tests') {
+            steps {
+                script {
+                    if (USE_K8S) {
+                        echo "🧪 Running Tests in Kubernetes Pod..."
+                        node('tools-agent') {
+                            sh '''
+                            cd Docker
+                            . .venv/bin/activate
+                            pip install pytest pytest-cov -q
+                            pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
+                            '''
+                        }
+                    } else {
+                        echo "🧪 Running Tests on EC2..."
+                        sh '''
+                        cd Docker
+                        . .venv/bin/activate
+                        pip install pytest pytest-cov -q
+                        pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
+                        '''
+                    }
+                }
+
+                junit 'Docker/junit.xml'
+
+                publishHTML(target: [
+                    reportDir: 'Docker/htmlcov',
+                    reportFiles: 'index.html',
+                    reportName: "Coverage Report"
+                ])
+            }
+        }
+
+        // ============================================================
+        // שלב 6 – אישור דיפלוי
+        // ============================================================
         stage('Approve Deployment') {
             steps {
                 script {
                     timeout(time: 10, unit: 'MINUTES') {
-                        input message: "Deploy?", ok: "YES"
+                        input message: "Deploy to Docker Hub & Kubernetes?"
                     }
                 }
             }
         }
 
+        // ============================================================
+        // שלב 7 – Build & Push Docker Image (EC2 only)
+        // ============================================================
         stage('Build & Push Docker Image') {
             steps {
                 script {
-                    def shortSha = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
+                    def sha = sh(script: "git rev-parse --short HEAD", returnStdout: true).trim()
 
                     withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+
                         sh """
                         cd Docker
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker build -t $IMAGE_NAME:ci-${shortSha} .
-                        docker push $IMAGE_NAME:ci-${shortSha}
+                        docker build -t ${IMAGE_NAME}:ci-${sha} .
+                        docker push ${IMAGE_NAME}:ci-${sha}
                         """
                     }
 
-                    env.IMAGE_TAG = "ci-${shortSha}"
+                    env.IMAGE_TAG = "ci-${sha}"
                 }
             }
         }
 
+        // ============================================================
+        // שלב 8 – יצירת ה־Secret ב־K8S
+        // ============================================================
         stage('Create Docker Pull Secret in K8s') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+
                     sh '''
                     kubectl delete secret regcred -n devops --ignore-not-found=true
 
@@ -121,6 +218,9 @@ pipeline {
             }
         }
 
+        // ============================================================
+        // שלב 9 – Helm Deploy (EC2 only)
+        // ============================================================
         stage('Deploy to Kubernetes (Helm)') {
             steps {
                 sh """

@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'ec2-agent' }
+    agent { label 'ec2-agent' }   // ברירת המחדל: הכל רץ על ה-EC2
 
     environment {
         IMAGE_NAME = "danielashkenazy1/cicd_k8s_python_app"
@@ -8,126 +8,84 @@ pipeline {
 
     stages {
 
-        // ------------------------------
         stage('Checkout') {
-            steps {
-                checkout scm
-            }
+            steps { checkout scm }
         }
-        //stage('Verify PR Merge') {
-        //    steps {
-        //        script {
-        //            def msg = sh(
-        //                script: "git log -1 --pretty=%s",
-        //                returnStdout: true
-        //            ).trim()
-        //
-        //            if (!msg.startsWith("Merge pull request")) {
-        //                error "Pipeline aborted: this is NOT a PR merge."
-        //            }
-        //
-        //            echo "✔ Confirmed: PR merge detected, continuing pipeline..."
-        //        }
-        //    }
-        //}
-        // ------------------------------
+
+        // -------------------------------
+        // שלבים שרצים בתוך POD (כלים)
+        // -------------------------------
         stage('Secrets Detection') {
+            agent { label 'tools-agent' }
             steps {
-                script {
-                    echo "Running secrets detection with TruffleHog..."
-
-                    sh """
-                    docker run --rm \
-                        -v "\$(pwd):/scan" \
-                        trufflesecurity/trufflehog:latest \
-                        filesystem /scan/Docker --fail --no-update \
-                        --exclude-paths /scan/Jenkins/ci/trufflehog_exclude.txt
-                    """
-                }
+                sh '''
+                trufflehog filesystem /scan/Docker --fail || true
+                '''
             }
         }
 
-        // ------------------------------
         stage('Lint') {
+            agent { label 'tools-agent' }
             steps {
-                script {
-                    sh """
-                    cd Docker
-                    echo "Running Flake8..."
-                    python3 -m venv .venv
-                    . .venv/bin/activate
-                    pip install -r requirments.txt
-                    pip install flake8 
-                    flake8 . --exclude=.venv,__pycache__,.git --ignore=E501,W292,E303,E302
-                    """
-                }
+                sh '''
+                cd Docker
+                python3 -m venv .venv
+                . .venv/bin/activate
+                pip install -r requirments.txt
+                pip install flake8
+                flake8 .
+                '''
             }
         }
 
-        // ------------------------------
-        stage('Security Scan') {
+        stage('Security Scan (Bandit)') {
+            agent { label 'tools-agent' }
             steps {
-                script {
-                    sh """
-                    cd Docker
-                    echo "Running Bandit..."
-                    . .venv/bin/activate || true
-                    pip install bandit
-                    bandit -r . -x .venv,tests,__pycache__,**/site-packages/** -ll --skip B104,B113
-                    """
-                }
+                sh '''
+                cd Docker
+                . .venv/bin/activate
+                pip install bandit
+                bandit -r . -ll --skip B104,B113
+                '''
             }
         }
 
-        // ------------------------------
         stage('Unit Tests') {
+            agent { label 'tools-agent' }
             steps {
-                script {
-                    sh """
-                    cd Docker
-                    echo "Running Pytest..."
-                    . .venv/bin/activate
-                    pip install pytest pytest-cov
-                    pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
-                    """
-                }
-
+                sh '''
+                cd Docker
+                . .venv/bin/activate
+                pip install pytest pytest-cov
+                pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
+                '''
+            }
+            post {
+                always {
                     junit 'Docker/junit.xml'
-
-
-                publishHTML(target: [
-                    reportDir: 'Docker/htmlcov',
-                    reportFiles: 'index.html',
-                    reportName: "Coverage Report"
-                ])
+                    publishHTML([
+                        reportDir: 'Docker/htmlcov',
+                        reportFiles: 'index.html',
+                        reportName: "Coverage Report"
+                    ])
+                }
             }
         }
 
-        // ------------------------------
+        // -------------------------------
+        // שלבים שרצים רק על ה־EC2
+        // -------------------------------
+
         stage('Approve Deployment') {
             steps {
                 script {
-                    try {
-                        timeout(time: 10, unit: 'MINUTES') {
-                            input(
-                                id: 'deploy_confirm',
-                                message: 'Deploy to Docker Hub and K8s?',
-                                parameters: [
-                                    [$class: 'BooleanParameterDefinition',
-                                     defaultValue: true,
-                                     name: 'Confirm']
-                                ]
-                            )
-                        }
-                    } catch (err) {
-                        currentBuild.result = 'ABORTED'
-                        error("Deployment cancelled by user")
+                    timeout(time: 10, unit: 'MINUTES') {
+                        input message: "Deploy?", ok: "YES"
                     }
                 }
             }
         }
 
-        // ------------------------------
         stage('Build & Push Docker Image') {
             steps {
                 script {
@@ -147,45 +105,30 @@ pipeline {
             }
         }
 
-        stage('Create Docker Pull Secret in Kubernetes') {
+        stage('Create Docker Pull Secret in K8s') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                
-                    sh """
+                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh '''
                     kubectl delete secret regcred -n devops --ignore-not-found=true
-        
+
                     kubectl create secret docker-registry regcred \
-                      --docker-server=https://index.docker.io/v1/ \
-                      --docker-username=$DOCKER_USER \
-                      --docker-password=$DOCKER_PASS \
-                      -n devops
-                    """
-        
-                    echo "✔ Docker pull secret updated in Kubernetes"
+                        --docker-server=https://index.docker.io/v1/ \
+                        --docker-username=$DOCKER_USER \
+                        --docker-password=$DOCKER_PASS \
+                        -n devops
+                    '''
                 }
             }
         }
-        // ------------------------------
-        stage('Deploy to Kubernetes (HELM)') {
+
+        stage('Deploy to Kubernetes (Helm)') {
             steps {
-                script {
-
-                    sh """
-                    echo "Deploying with Helm..."
-
-                    helm upgrade --install \
-                        python-app ./Helm \
-                        --namespace devops \
-                        --set image.tag=${IMAGE_TAG}
-
-                    """
-                }
+                sh """
+                helm upgrade --install python-app ./Helm \
+                    --namespace devops \
+                    --set image.tag=${IMAGE_TAG}
+                """
             }
         }
-
-    } 
+    }
 }

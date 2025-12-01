@@ -175,7 +175,7 @@ resource "kubernetes_role" "jenkins_deployer_role" {
   rule {
     api_groups = ["", "apps"]
     resources  = ["pods", "services", "deployments","exec","pods/exec"]
-    verbs      = ["get", "list", "watch", "create", "update", "patch","delete"]
+    verbs      = ["create","get", "list", "watch", "create", "update", "patch","delete"]
   }
   rule {
     api_groups = [""]

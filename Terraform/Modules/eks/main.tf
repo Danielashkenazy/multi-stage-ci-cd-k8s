@@ -19,14 +19,14 @@ module "eks" {
       desired_size   = 2
       max_size       = 3
       min_size       = 1
-      instance_types = ["t3.micro"]
+      instance_types = ["t3.medium"]
       subnet_ids     = [var.public_subnet_a_id, var.public_subnet_b_id]
     }
     private_nodes = {
       desired_size   = 2
       max_size       = 3
       min_size       = 1
-      instance_types = ["t3.micro"]
+      instance_types = ["t3.medium"]
       subnet_ids     = [var.private_subnet_a_id]
     }
   }

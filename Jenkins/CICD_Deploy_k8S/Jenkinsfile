@@ -21,7 +21,7 @@ pipeline {
                     echo "🔍 Checking Kubernetes dynamic agent availability..."
 
                     try {
-                        timeout(time: 20, unit: 'SECONDS') {
+                        timeout(time: 180, unit: 'SECONDS') {
                             node('tools-agent') {
                                 sh "echo 'K8S dynamic agent works'"
                             }

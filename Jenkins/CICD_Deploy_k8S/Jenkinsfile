@@ -99,7 +99,9 @@ pipeline {
                         cd Docker
                         . .venv/bin/activate
                         pip install bandit -q
-                        bandit -r . -ll --skip B104,B113 --exclude .venv
+                        bandit -r . -ll --skip B104,B113 \
+                        --exclude .venv,venv,__pycache__,*/.venv/*,*/venv/*,*/__pycache__/*
+
                     '''
 
                     if (USE_K8S) {

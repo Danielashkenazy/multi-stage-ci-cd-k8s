@@ -17,4 +17,6 @@ variable "allowed_cidr" {
 variable "slave_sg_id" {
   description = "Security Group ID for slave instance"
 }
-
+variable "jenkins_sg_id" {
+  description = "Security Group ID for Jenkins instance"
+}

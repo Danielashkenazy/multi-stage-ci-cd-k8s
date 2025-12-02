@@ -52,8 +52,8 @@ module "eks" {
   public_subnet_b_id  = module.vpc.public_subnet_b_id
   private_subnet_a_id = module.vpc.private_subnet_a_id
   slave_sg_id         = module.security.slave_sg_id
+  jenkins_sg_id       = module.security.jenkins_sg_id
   depends_on = [ module.vpc, module.compute ]
-
 
 }
 

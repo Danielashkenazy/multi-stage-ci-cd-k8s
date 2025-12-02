@@ -64,91 +64,76 @@ pipeline {
         }
 
         // ============================================================
-        // שלב 3 – Lint (flake8)
+        // שלב 3 – Lint (flake8) – EXCLUDE venv
         // ============================================================
         stage('Lint') {
             steps {
                 script {
-                    if (USE_K8S) {
-                        echo "🔧 Running Lint in Kubernetes Pod..."
-                        node('tools-agent') {
-                            sh '''
-                            cd Docker
-                            python3 -m venv .venv
-                            . .venv/bin/activate
-                            pip install -r requirments.txt -q
-                            pip install flake8 -q
-                            flake8 .
-                            '''
-                        }
-                    } else {
-                        echo "🔧 Running Lint on EC2..."
-                        sh '''
+                    def lintCmd = '''
                         cd Docker
                         python3 -m venv .venv
                         . .venv/bin/activate
                         pip install -r requirments.txt -q
                         pip install flake8 -q
-                        flake8 .
-                        '''
+                        flake8 . --exclude .venv
+                    '''
+
+                    if (USE_K8S) {
+                        echo "🔧 Running Lint in Kubernetes Pod..."
+                        node('tools-agent') { sh lintCmd }
+                    } else {
+                        echo "🔧 Running Lint on EC2..."
+                        sh lintCmd
                     }
                 }
             }
         }
 
         // ============================================================
-        // שלב 4 – Security Scan (bandit)
+        // שלב 4 – Security Scan (bandit) – EXCLUDE venv
         // ============================================================
         stage('Security Scan') {
             steps {
                 script {
-                    if (USE_K8S) {
-                        echo "🔐 Running Bandit in Kubernetes Pod..."
-                        node('tools-agent') {
-                            sh '''
-                            cd Docker
-                            . .venv/bin/activate
-                            pip install bandit -q
-                            bandit -r . -ll --skip B104,B113
-                            '''
-                        }
-                    } else {
-                        echo "🔐 Running Bandit on EC2..."
-                        sh '''
+                    def banditCmd = '''
                         cd Docker
                         . .venv/bin/activate
                         pip install bandit -q
-                        bandit -r . -ll --skip B104,B113
-                        '''
+                        bandit -r . -ll --skip B104,B113 --exclude .venv
+                    '''
+
+                    if (USE_K8S) {
+                        echo "🔐 Running Bandit in Kubernetes Pod..."
+                        node('tools-agent') { sh banditCmd }
+                    } else {
+                        echo "🔐 Running Bandit on EC2..."
+                        sh banditCmd
                     }
                 }
             }
         }
 
         // ============================================================
-        // שלב 5 – Tests (pytest)
+        // שלב 5 – Tests (pytest) – EXCLUDE venv
         // ============================================================
         stage('Unit Tests') {
             steps {
                 script {
-                    if (USE_K8S) {
-                        echo "🧪 Running Tests in Kubernetes Pod..."
-                        node('tools-agent') {
-                            sh '''
-                            cd Docker
-                            . .venv/bin/activate
-                            pip install pytest pytest-cov -q
-                            pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
-                            '''
-                        }
-                    } else {
-                        echo "🧪 Running Tests on EC2..."
-                        sh '''
+                    def testCmd = '''
                         cd Docker
                         . .venv/bin/activate
                         pip install pytest pytest-cov -q
-                        pytest --cov=. --cov-report=html --cov-report=xml --junitxml=junit.xml
-                        '''
+                        pytest --cov=. --cov-report=html --cov-report=xml \
+                               --junitxml=junit.xml \
+                               --ignore=.venv
+                    '''
+
+                    if (USE_K8S) {
+                        echo "🧪 Running Tests in Kubernetes Pod..."
+                        node('tools-agent') { sh testCmd }
+                    } else {
+                        echo "🧪 Running Tests on EC2..."
+                        sh testCmd
                     }
                 }
 

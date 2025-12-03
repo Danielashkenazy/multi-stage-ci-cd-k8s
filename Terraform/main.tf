@@ -246,9 +246,79 @@ resource "kubernetes_secret" "jenkins_sa_token" {
 
 
 resource "null_resource" "kube_config_ready" {
-  # המשאב הזה לא עושה כלום,רק מאלץ את הטעינה.
+  #This resource is used to create a dependency barrier to ensure that the EKS cluster is fully ready before proceeding
   triggers = {
     cluster_endpoint = data.aws_eks_cluster.this.endpoint
     cluster_token    = data.aws_eks_cluster_auth.this.token
+  }
+}
+
+
+####Scaling ####
+resource "helm_release" "metrics_server" {
+  name       = "metrics-server"
+  namespace  = "kube-system"
+  repository = "https://kubernetes-sigs.github.io/metrics-server/"
+  chart      = "metrics-server"
+  version    = "3.12.1"
+
+  set = [
+    {
+      name  = "args[0]"
+      value = "--kubelet-insecure-tls"
+    }
+  ]
+}
+resource "kubernetes_horizontal_pod_autoscaler_v2" "app_hpa" {
+  metadata {
+    name      = "app-hpa"
+    namespace = "devops"
+  }
+
+  spec {
+    min_replicas = 2
+    max_replicas = 10
+
+    scale_target_ref {
+      api_version = "apps/v1"
+      kind        = "Deployment"
+      name        = "python-app-rickandmorty"
+
+    }
+
+    metric {
+      type = "Resource"
+
+      resource {
+        name = "cpu"
+
+        target {
+          type                = "Utilization"
+          average_utilization = 70
+        }
+      }
+    }
+
+    behavior {
+      scale_up {
+        stabilization_window_seconds = 0
+        select_policy = "Max"
+        policy {
+          type          = "Percent"
+          value         = 100
+          period_seconds = 60
+        }
+      }
+
+      scale_down {
+        stabilization_window_seconds = 60
+        select_policy = "Max"
+        policy {
+          type          = "Percent"
+          value         = 50
+          period_seconds = 60
+        }
+      }
+    }
   }
 }

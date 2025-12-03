@@ -94,7 +94,7 @@ resource "aws_security_group_rule" "jenkins_allow_eks_jnlp" {
 //  description              = "Jenkins can SSH into slave"
 //}
 
-
+######EKS Security Group Rules######
 resource "aws_security_group_rule" "jenkins_to_eks_api" {
   type                     = "ingress"
   from_port                = 443

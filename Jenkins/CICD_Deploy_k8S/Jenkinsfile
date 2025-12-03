@@ -64,104 +64,102 @@ pipeline {
         }
 
         // ============================================================
-        // שלב 3 – Lint (flake8) – EXCLUDE venv
+        // שלב 3-5 – Quality Checks (Lint + Security + Tests)
+        // רץ על K8S או EC2 לפי הזמינות
         // ============================================================
-        stage('Lint') {
+        stage('Quality Checks') {
             steps {
                 script {
-                    def lintCmd = '''
-                        cd Docker
-                        python3 -m venv .venv
-                        . .venv/bin/activate
-                        pip install -r requirments.txt -q
-                        pip install flake8 -q
-                        flake8 . --exclude .venv
-                    '''
-
                     if (USE_K8S) {
+                        echo "🔧 Running Quality Checks in Kubernetes Pod..."
+                        node('tools-agent') {
+                            checkout scm
+                            container('tools') {
+                                // יצירת venv והתקנת תלויות - פעם אחת
+                                sh '''
+                                    cd Docker
+                                    python3 -m venv .venv
+                                    . .venv/bin/activate
+                                    pip install -r requirments.txt -q
+                                    pip install flake8 bandit pytest pytest-cov -q
+                                '''
+
+                                // Lint
+                                echo "🔧 Running Lint..."
+                                sh '''
+                                    cd Docker
+                                    . .venv/bin/activate
+                                    flake8 . --exclude .venv
+                                '''
+
+                                // Security Scan
+                                echo "🔐 Running Bandit..."
+                                sh '''
+                                    cd Docker
+                                    . .venv/bin/activate
+                                    bandit -r . -ll --skip B104,B113 \
+                                    --exclude .venv,venv,__pycache__,*/.venv/*,*/venv/*,*/__pycache__/*
+                                '''
+
+                                // Unit Tests
+                                echo "🧪 Running Tests..."
+                                sh '''
+                                    cd Docker
+                                    . .venv/bin/activate
+                                    pytest --cov=. --cov-report=html --cov-report=xml \
+                                           --junitxml=junit.xml \
+                                           --ignore=.venv
+                                '''
+                            }
+                        }
+                    } else {
+                        echo "🔧 Running Quality Checks on EC2..."
                         
-                        echo "🔧 Running Lint in Kubernetes Pod..."
-                        node('tools-agent') { 
-                            checkout scm
-                            container('tools')  {
-                                sh lintCmd
-                            }
-                        }
-                    } else {
-                        echo "🔧 Running Lint on EC2..."
-                        sh lintCmd
+                        // יצירת venv והתקנת תלויות
+                        sh '''
+                            cd Docker
+                            python3 -m venv .venv
+                            . .venv/bin/activate
+                            pip install -r requirments.txt -q
+                            pip install flake8 bandit pytest pytest-cov -q
+                        '''
+
+                        // Lint
+                        echo "🔧 Running Lint..."
+                        sh '''
+                            cd Docker
+                            . .venv/bin/activate
+                            flake8 . --exclude .venv
+                        '''
+
+                        // Security Scan
+                        echo "🔐 Running Bandit..."
+                        sh '''
+                            cd Docker
+                            . .venv/bin/activate
+                            bandit -r . -ll --skip B104,B113 \
+                            --exclude .venv,venv,__pycache__,*/.venv/*,*/venv/*,*/__pycache__/*
+                        '''
+
+                        // Unit Tests
+                        echo "🧪 Running Tests..."
+                        sh '''
+                            cd Docker
+                            . .venv/bin/activate
+                            pytest --cov=. --cov-report=html --cov-report=xml \
+                                   --junitxml=junit.xml \
+                                   --ignore=.venv
+                        '''
                     }
+
+                    // פרסום תוצאות (רץ על EC2 agent)
+                    junit 'Docker/junit.xml'
+                    publishHTML(target: [
+                        reportDir: 'Docker/htmlcov',
+                        reportFiles: 'index.html',
+                        reportName: "Coverage Report"
+                    ])
                 }
-            }
-        }
-
-        // ============================================================
-        // שלב 4 – Security Scan (bandit) – EXCLUDE venv
-        // ============================================================
-        stage('Security Scan') {
-            steps {
-                script {
-                    def banditCmd = '''
-                        cd Docker
-                        . .venv/bin/activate
-                        pip install bandit -q
-                        bandit -r . -ll --skip B104,B113 \
-                        --exclude .venv,venv,__pycache__,*/.venv/*,*/venv/*,*/__pycache__/*
-
-                    '''
-
-                    if (USE_K8S) {
-                        echo "🔐 Running Bandit in Kubernetes Pod..."
-                        node('tools-agent') { 
-                            checkout scm
-                             container('tools')  {
-                                sh banditCmd
-                            } 
-                        }
-                    } else {
-                        echo "🔐 Running Bandit on EC2..."
-                        sh banditCmd
-                    }
-                }
-            }
-        }
-
-        // ============================================================
-        // שלב 5 – Tests (pytest) – EXCLUDE venv
-        // ============================================================
-        stage('Unit Tests') {
-            steps {
-                script {
-                    def testCmd = '''
-                        cd Docker
-                        . .venv/bin/activate
-                        pip install pytest pytest-cov -q
-                        pytest --cov=. --cov-report=html --cov-report=xml \
-                               --junitxml=junit.xml \
-                               --ignore=.venv
-                    '''
-
-                    if (USE_K8S) {
-                        echo "🧪 Running Tests in Kubernetes Pod..."
-                        node('tools-agent') { 
-                            checkout scm
-                             container('tools')  {
-                                sh testCmd
-                            }
-                        }
-                    } else {
-                        echo "🧪 Running Tests on EC2..."
-                        sh testCmd
-                    }
-                }
-
-                junit 'Docker/junit.xml'
-
-                publishHTML(target: [
-                    reportDir: 'Docker/htmlcov',
-                    reportFiles: 'index.html',
-                    reportName: "Coverage Report"
-                ])
             }
         }
 

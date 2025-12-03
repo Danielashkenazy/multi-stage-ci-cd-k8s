@@ -1,6 +1,9 @@
 output "vpc_id" {
   value = aws_vpc.main.id
 }
+output "vpc_cidr" {
+  value = aws_vpc.main.cidr_block
+}
 
 output "public_subnet_a_id" {
   value = aws_subnet.public_a.id
@@ -10,4 +13,8 @@ output "public_subnet_b_id" {
 }
 output "private_subnet_a_id" {
   value = aws_subnet.private_a.id
+}
+
+output "nat_eip" {
+  value = aws_eip.nat_eip.public_ip
 }

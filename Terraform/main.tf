@@ -110,6 +110,9 @@ module "security" {
   vpc_id = module.vpc.vpc_id
   own_ip = var.own_ip
   github_webhook_cidr = var.github_webhook_cidr
+  nat_eip = module.vpc.nat_eip
+  eks_cluster_sg_id = module.eks.eks_cluster_sg_id
+  eks_node_sg_id = module.eks.eks_node_sg_id
 }
 
 
@@ -243,7 +246,7 @@ resource "kubernetes_secret" "jenkins_sa_token" {
 
 
 resource "null_resource" "kube_config_ready" {
-  # המשאב הזה לא עושה כלום, רק מאלץ את הטעינה.
+  # המשאב הזה לא עושה כלום,רק מאלץ את הטעינה.
   triggers = {
     cluster_endpoint = data.aws_eks_cluster.this.endpoint
     cluster_token    = data.aws_eks_cluster_auth.this.token

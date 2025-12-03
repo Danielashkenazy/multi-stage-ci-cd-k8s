@@ -30,24 +30,32 @@ module "eks" {
       subnet_ids     = [var.private_subnet_a_id]
     }
   }
-  cluster_security_group_additional_rules = {
-    allow_slave_to_eks_api = {
-    description                   = "Allow Jenkins Slave to EKS API"
-      protocol                      = "tcp"
-      from_port                     = 443
-      to_port                       = 443
-      type                          = "ingress"
-      source_security_group_id      = var.slave_sg_id
-    }
-    allow_slave_to_eks_api = {
-    description                   = "Allow Jenkins Slave to EKS API"
-      protocol                      = "tcp"
-      from_port                     = 443
-      to_port                       = 443
-      type                          = "ingress"
-      source_security_group_id      = var.jenkins_sg_id
-    }
-  }
+  //cluster_security_group_additional_rules = {
+  //  allow_Jenkins_to_eks_api = {
+  //  description                   = "Allow Jenkins Slave to EKS API"
+  //    protocol                      = "tcp"
+  //    from_port                     = 443
+  //    to_port                       = 443
+  //    type                          = "ingress"
+  //    source_security_group_id      = var.slave_sg_id
+  //  }
+  //  allow_slave_to_eks_api = {
+  //  description                   = "Allow Jenkins Master to EKS API"
+  //    protocol                      = "tcp"
+  //    from_port                     = 443
+  //    to_port                       = 443
+  //    type                          = "ingress"
+  //    source_security_group_id      = var.jenkins_sg_id
+  //  }
+  //  allow_nodes_to_jenkins = {
+  //  description                     = "Allow Node to access Jenkins"
+  //    protocol                      = "tcp"
+  //    from_port                     = 50000
+  //    to_port                       = 50000
+  //    type                          = "egress"
+  //    source_security_group_id      = var.jenkins_sg_id
+  //  }
+  //}
   tags = { Environment = "test" }
 }
 

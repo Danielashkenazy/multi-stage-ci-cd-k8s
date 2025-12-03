@@ -79,6 +79,7 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
+                        checkout scm
                         echo "🔧 Running Lint in Kubernetes Pod..."
                         node('tools-agent') { sh lintCmd }
                     } else {
@@ -105,6 +106,7 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
+                        checkout scm
                         echo "🔐 Running Bandit in Kubernetes Pod..."
                         node('tools-agent') { sh banditCmd }
                     } else {
@@ -131,6 +133,7 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
+                        checkout scm
                         echo "🧪 Running Tests in Kubernetes Pod..."
                         node('tools-agent') { sh testCmd }
                     } else {

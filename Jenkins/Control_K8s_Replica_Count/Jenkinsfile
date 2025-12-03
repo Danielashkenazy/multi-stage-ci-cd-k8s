@@ -1,4 +1,7 @@
+def USE_K8S = false
+
 pipeline {
+
     agent { label 'ec2-agent' }
 
     parameters {
@@ -8,32 +11,69 @@ pipeline {
 
     environment {
         KUBECONFIG = "/home/ubuntu/.kube/config"
-        NAMESPACE = "devops"
-        RELEASE = "python-app"
-        CHART = "./Helm"
+        NAMESPACE  = "devops"
+        RELEASE    = "python-app"
+        CHART      = "./Helm"
     }
 
     stages {
 
-        stage('Helm Upgrade') {
+        // ===============================
+        // Detect Kubernetes Dynamic Agent
+        // ===============================
+        stage('Detect Kubernetes Availability') {
             steps {
-                sh """
-                    echo "Using REPLICAS=${REPLICAS}"
-                    echo "Using IMAGE_TAG=${IMAGE_TAG}"
-
-                    helm upgrade ${RELEASE} ${CHART} \
-                        --namespace ${NAMESPACE} \
-                        --set replicaCount=${REPLICAS} \
-                        --set image.tag=${IMAGE_TAG}
-                """
+                script {
+                    try {
+                        timeout(time: 120, unit: 'SECONDS') {
+                            node('tools-agent') {
+                                sh "echo 'K8S agent available'"
+                            }
+                        }
+                        USE_K8S = true
+                    } catch (err) {
+                        USE_K8S = false
+                    }
+                }
             }
         }
 
+        // ===============================
+        // Helm Upgrade
+        // ===============================
+        stage('Helm Upgrade') {
+            steps {
+                script {
+                    if (USE_K8S) {
+                        node('tools-agent') {
+                            checkout scm
+                            container('tools') {
+                                sh """
+                                helm upgrade ${RELEASE} ${CHART} \
+                                  --namespace ${NAMESPACE} \
+                                  --set replicaCount=${REPLICAS} \
+                                  --set image.tag=${IMAGE_TAG}
+                                """
+                            }
+                        }
+                    } else {
+                        sh """
+                        helm upgrade ${RELEASE} ${CHART} \
+                          --namespace ${NAMESPACE} \
+                          --set replicaCount=${REPLICAS} \
+                          --set image.tag=${IMAGE_TAG}
+                        """
+                    }
+                }
+            }
+        }
+
+        // ===============================
+        // Verify
+        // ===============================
         stage('Verify') {
             steps {
-                sh """
-                    kubectl -n ${NAMESPACE} get deploy
-                """
+                sh "kubectl -n ${NAMESPACE} get deploy"
             }
         }
     }

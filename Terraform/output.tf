@@ -42,12 +42,12 @@ output "jenkins_credentials" {
   sensitive   = true
 }
 output "jenkins_sa_token" {
-  value     = kubernetes_secret.jenkins_sa_token.data["token"]
+  value     = module.k8s_foundation.jenkins_sa_token
   sensitive = true
 }
 
 output "jenkins_sa_ca" {
-  value     = kubernetes_secret.jenkins_sa_token.data["ca.crt"]
+  value     = module.k8s_foundation.jenkins_sa_ca
   sensitive = true
 }
 output "cluster_endpoint" {

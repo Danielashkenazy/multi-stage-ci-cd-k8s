@@ -1,4 +1,7 @@
+def USE_K8S = false
+
 pipeline {
+
     agent { label 'ec2-agent' }
 
     parameters {
@@ -15,23 +18,51 @@ pipeline {
 
     stages {
 
+        // ===============================
+        // Detect Kubernetes Dynamic Agent
+        // ===============================
+        stage('Detect Kubernetes Availability') {
+            steps {
+                script {
+                    try {
+                        timeout(time: 120, unit: 'SECONDS') {
+                            node('tools-agent') {
+                                sh "echo 'K8S agent available'"
+                            }
+                        }
+                        USE_K8S = true
+                    } catch (err) {
+                        USE_K8S = false
+                    }
+                }
+            }
+        }
+
+        // ===============================
+        // Checkout
+        // ===============================
         stage('Checkout Repository') {
             steps {
                 checkout scm
             }
         }
 
+        // ===============================
+        // Validate file exists
+        // ===============================
         stage('Validate file exists') {
             steps {
                 script {
                     if (!fileExists(params.FILE_PATH)) {
-                        error "❌ File does not exist in repo: ${params.FILE_PATH}"
+                        error "File does not exist: ${params.FILE_PATH}"
                     }
-                    echo "✔ File exists: ${params.FILE_PATH}"
                 }
             }
         }
 
+        // ===============================
+        // Find Running Pod
+        // ===============================
         stage('Find Running Pod') {
             steps {
                 script {
@@ -45,27 +76,41 @@ pipeline {
                     ).trim()
 
                     if (!env.POD) {
-                        error "❌ No Running pods found with label: ${LABEL}"
+                        error "No running pod found"
                     }
-
-                    echo "✔ Using Running Pod: ${env.POD}"
                 }
             }
         }
 
+        // ===============================
+        // Copy File to Pod
+        // ===============================
         stage('Copy file to pod') {
             steps {
-                sh """
-                echo "Copying file to pod..."
-                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c ${CONTAINER}
-                """
+                script {
+                    if (USE_K8S) {
+                        node('tools-agent') {
+                            container('tools') {
+                                sh """
+                                kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c ${CONTAINER}
+                                """
+                            }
+                        }
+                    } else {
+                        sh """
+                        kubectl cp ${FILE_PATH} ${NAMESPACE}/${POD}:${TARGET_PATH} -c ${CONTAINER}
+                        """
+                    }
+                }
             }
         }
 
+        // ===============================
+        // Verify inside pod
+        // ===============================
         stage('Verify inside pod') {
             steps {
                 sh """
-                echo "Verifying file inside pod..."
                 kubectl exec -n ${NAMESPACE} ${POD} -c ${CONTAINER} -- ls -l ${TARGET_PATH}
                 """
             }

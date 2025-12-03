@@ -83,7 +83,10 @@ pipeline {
                         echo "🔧 Running Lint in Kubernetes Pod..."
                         node('tools-agent') { 
                             checkout scm
-                            sh lintCmd }
+                            container('tools')  {
+                                sh lintCmd
+                            }
+                        }
                     } else {
                         echo "🔧 Running Lint on EC2..."
                         sh lintCmd
@@ -111,7 +114,9 @@ pipeline {
                         echo "🔐 Running Bandit in Kubernetes Pod..."
                         node('tools-agent') { 
                             checkout scm
-                            sh banditCmd 
+                             container('tools')  {
+                                sh banditCmd
+                            } 
                         }
                     } else {
                         echo "🔐 Running Bandit on EC2..."
@@ -140,7 +145,9 @@ pipeline {
                         echo "🧪 Running Tests in Kubernetes Pod..."
                         node('tools-agent') { 
                             checkout scm
-                            sh testCmd 
+                             container('tools')  {
+                                sh testCmd
+                            }
                         }
                     } else {
                         echo "🧪 Running Tests on EC2..."

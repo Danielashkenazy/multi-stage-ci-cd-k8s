@@ -79,9 +79,11 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
-                        checkout scm
+                        
                         echo "🔧 Running Lint in Kubernetes Pod..."
-                        node('tools-agent') { sh lintCmd }
+                        node('tools-agent') { 
+                            checkout scm
+                            sh lintCmd }
                     } else {
                         echo "🔧 Running Lint on EC2..."
                         sh lintCmd
@@ -106,9 +108,11 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
-                        checkout scm
                         echo "🔐 Running Bandit in Kubernetes Pod..."
-                        node('tools-agent') { sh banditCmd }
+                        node('tools-agent') { 
+                            checkout scm
+                            sh banditCmd 
+                        }
                     } else {
                         echo "🔐 Running Bandit on EC2..."
                         sh banditCmd
@@ -133,9 +137,11 @@ pipeline {
                     '''
 
                     if (USE_K8S) {
-                        checkout scm
                         echo "🧪 Running Tests in Kubernetes Pod..."
-                        node('tools-agent') { sh testCmd }
+                        node('tools-agent') { 
+                            checkout scm
+                            sh testCmd 
+                        }
                     } else {
                         echo "🧪 Running Tests on EC2..."
                         sh testCmd

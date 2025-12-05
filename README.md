@@ -427,7 +427,7 @@ This refreshes the token and takes ~10 seconds.
 
 **Cause:**
 - EC2 instance failed to connect to Jenkins master during startup
-- Network issues, security group misconfiguration, or user-data script failure
+- This may happen upon first apply due to slave starting before master.
 
 **Diagnosis:**
 
@@ -1416,4 +1416,5 @@ Daniel Ashkenazy - [GitHub](https://github.com/Danielashkenazy)
 ---
 
 **Built with ❤️ and lots of ☕**
+
 
